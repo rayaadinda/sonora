@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        id: meta
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $tag = $env:GITHUB_REF_NAME
+            $version = $tag.TrimStart("v")
+            $isTag = $true
+          } else {
+            $cargoToml = Get-Content -Raw Cargo.toml
+            if ($cargoToml -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
+              throw "Could not read version from Cargo.toml"
+            }
+            $version = $Matches[1]
+            $tag = "v$version"
+            $isTag = $false
+          }
+
+          $shouldRelease = $true
+          if (-not $isTag -and $env:GITHUB_EVENT_NAME -eq "push") {
+            gh release view $tag 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Release $tag already exists; skipping automatic release on main push."
+              $shouldRelease = $false
+            }
+          }
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "should_release=$($shouldRelease.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.meta.outputs.should_release == 'true'
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.meta.outputs.should_release == 'true'
+
+      - name: Lint with Clippy
+        if: steps.meta.outputs.should_release == 'true'
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build release binary
+        if: steps.meta.outputs.should_release == 'true'
+        run: cargo build --release
+
+      - name: Build Windows installer (.exe)
+        if: steps.meta.outputs.should_release == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $cmd = Get-Command iscc -ErrorAction SilentlyContinue
+            if ($cmd) {
+              $iscc = $cmd.Source
+            } else {
+              choco install innosetup -y
+            }
+          }
+          & $iscc "/DAppVersion=${{ steps.meta.outputs.version }}" "installer\sonora.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package portable archive and checksums
+        if: steps.meta.outputs.should_release == 'true'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          $zipPath = "dist\sonora-v$version-windows-x86_64-portable.zip"
+          Compress-Archive -Path "target\release\sonora.exe", "README.md" -DestinationPath $zipPath -Force
+
+          $hashes = Get-ChildItem -Path dist -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | ForEach-Object {
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          }
+          $hashes | Out-File -FilePath "dist\SHA256SUMS.txt" -Encoding ascii
+
+      - name: Create GitHub Release
+        if: steps.meta.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Sonora ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS.txt
