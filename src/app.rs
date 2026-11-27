@@ -12,7 +12,6 @@ use ratatui::DefaultTerminal;
 use crate::audio::engine::AudioEngine;
 use crate::audio::spectrum::SpectrumAnalyzer;
 use crate::config::{expand_user_path, AppConfig, RepeatMode};
-use crate::error::AudioError;
 use crate::library::scanner::{spawn_scan, ScanEvent};
 use crate::library::track::{format_duration, Track};
 use crate::ui::cover::CoverArt;
@@ -58,15 +57,20 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cli_path: Option<PathBuf>) -> Result<Self, AudioError> {
+    pub fn new(cli_path: Option<PathBuf>) -> Self {
         let mut config = AppConfig::load();
         let auto_play_single_file = cli_path.as_ref().is_some_and(|p| p.is_file());
         let folders = config.resolve_music_dirs(cli_path);
         let root_label = format_roots_label(&folders);
-        let audio = AudioEngine::new(config.volume)?;
+        let mut audio = AudioEngine::new(config.volume);
+        let toast = audio.take_init_error().map(|message| Toast {
+            message,
+            is_error: true,
+            expires_at: Instant::now() + Duration::from_secs(6),
+        });
         let scan_rx = spawn_scan(folders.clone());
 
-        Ok(Self {
+        Self {
             audio,
             analyzer: SpectrumAnalyzer::new(),
             cover: CoverArt::new(),
@@ -88,10 +92,10 @@ impl App {
             folder_selected: None,
             show_help: false,
             should_quit: false,
-            toast: None,
+            toast,
             tick: 0,
             vis_width: 48,
-        })
+        }
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {

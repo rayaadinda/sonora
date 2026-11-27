@@ -34,11 +34,11 @@ Source: "..\target\release\sonora.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Sonora"; Filename: "{app}\sonora.exe"
-Name: "{autodesktop}\Sonora"; Filename: "{app}\sonora.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Sonora"; Filename: "{app}\sonora.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\Sonora"; Filename: "{app}\sonora.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\sonora.exe"; Description: "{cm:LaunchProgram,Sonora}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\sonora.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,Sonora}"; Flags: nowait postinstall skipifsilent shellexec
 
 [Code]
 function EnvRootKey: Integer;
