@@ -24,15 +24,22 @@ pub fn desired_height(terminal_height: u16, terminal_width: u16) -> u16 {
     }
 }
 
-pub fn render(
-    frame: &mut Frame,
-    area: Rect,
-    theme_kind: ThemeKind,
-    theme: &Theme,
-    active_track: Option<&Track>,
-    total_tracks: usize,
-    scanning: bool,
-) {
+pub struct HeaderView<'a> {
+    pub theme_kind: ThemeKind,
+    pub theme: &'a Theme,
+    pub active_track: Option<&'a Track>,
+    pub total_tracks: usize,
+    pub scanning: bool,
+    pub discord_rpc: bool,
+}
+
+pub fn render(frame: &mut Frame, area: Rect, view: &HeaderView<'_>) {
+    let theme = view.theme;
+    let theme_kind = view.theme_kind;
+    let active_track = view.active_track;
+    let total_tracks = view.total_tracks;
+    let scanning = view.scanning;
+    let discord_rpc = view.discord_rpc;
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -136,6 +143,15 @@ pub fn render(
             Span::styled(
                 theme_kind.name(),
                 Style::default().fg(Theme::color(theme.accent_secondary)),
+            ),
+            Span::styled(" • RPC: ", Style::default().fg(Theme::color(theme.muted))),
+            Span::styled(
+                if discord_rpc { "ON" } else { "OFF" },
+                Style::default().fg(if discord_rpc {
+                    Theme::color(theme.accent_primary)
+                } else {
+                    Theme::color(theme.muted)
+                }),
             ),
         ]),
         Line::from(vec![

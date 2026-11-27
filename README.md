@@ -18,7 +18,8 @@ Audiophile lossless **FLAC** terminal music player built with `ratatui`, `crosst
 - **Embedded Album Cover Art**: True-color Unicode half-block (`▀`) rendering for embedded FLAC cover images, with an animated vinyl fallback.
 - **Monochrome Themes**: `Obsidian` (default), `Graphite`, `Noir`, and `Paper` (light monochrome) with subtle grayscale gradients.
 - **Non-Blocking Library Scanner & Live Search**: Background recursive `.flac` scanning with instant `/` filtering by title, artist, or album.
-- **Persistent Settings**: Saves theme, volume, shuffle, repeat, visualizer mode, and last folder to `sonora/config.toml`.
+- **Discord Rich Presence**: Displays **`Listening to Sonora`** with live song progress bar, artist/title, lossless quality tooltip, and automatic album cover art lookup (toggle anytime with `D`).
+- **Persistent Settings**: Saves theme, volume, shuffle, repeat, visualizer mode, Discord RPC preference, and folders to `sonora/config.toml`.
 
 ## Installation (Windows)
 
@@ -69,5 +70,6 @@ cargo build --release
 | `/` | Filter library live |
 | `t` | Cycle color theme |
 | `v` | Cycle visualizer (`Spectrum` / `Mirror` / `Wave`) |
+| `D` | Toggle Discord Rich Presence |
 | `?` | Toggle help overlay |
 | `q` / `Ctrl+C` | Quit |

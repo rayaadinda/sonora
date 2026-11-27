@@ -1,6 +1,7 @@
 mod app;
 mod audio;
 mod config;
+mod discord;
 mod error;
 mod library;
 mod ui;

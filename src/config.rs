@@ -60,6 +60,8 @@ impl VisualizerMode {
     }
 }
 
+pub const DEFAULT_DISCORD_CLIENT_ID: &str = "1575844168532754523";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
@@ -70,6 +72,9 @@ pub struct AppConfig {
     pub shuffle: bool,
     pub repeat: RepeatMode,
     pub visualizer: VisualizerMode,
+    pub discord_rpc: bool,
+    pub discord_client_id: Option<String>,
+    pub discord_cover_lookup: bool,
 }
 
 impl Default for AppConfig {
@@ -82,6 +87,9 @@ impl Default for AppConfig {
             shuffle: false,
             repeat: RepeatMode::All,
             visualizer: VisualizerMode::Bars,
+            discord_rpc: true,
+            discord_client_id: None,
+            discord_cover_lookup: true,
         }
     }
 }
@@ -138,6 +146,14 @@ impl AppConfig {
             .unwrap_or_else(|| PathBuf::from("."));
         self.music_dirs.push(fallback.clone());
         vec![fallback]
+    }
+
+    pub fn effective_discord_client_id(&self) -> &str {
+        self.discord_client_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .unwrap_or(DEFAULT_DISCORD_CLIENT_ID)
     }
 }
 

@@ -12,6 +12,7 @@ use ratatui::DefaultTerminal;
 use crate::audio::engine::AudioEngine;
 use crate::audio::spectrum::SpectrumAnalyzer;
 use crate::config::{expand_user_path, AppConfig, RepeatMode};
+use crate::discord::rpc::DiscordRpc;
 use crate::library::scanner::{spawn_scan, ScanEvent};
 use crate::library::track::{format_duration, Track};
 use crate::ui::cover::CoverArt;
@@ -33,6 +34,7 @@ pub struct App {
     audio: AudioEngine,
     analyzer: SpectrumAnalyzer,
     cover: CoverArt,
+    discord: DiscordRpc,
     config: AppConfig,
     folders: Vec<PathBuf>,
     root_label: String,
@@ -69,11 +71,17 @@ impl App {
             expires_at: Instant::now() + Duration::from_secs(6),
         });
         let scan_rx = spawn_scan(folders.clone());
+        let discord = DiscordRpc::new(
+            config.effective_discord_client_id().to_string(),
+            config.discord_rpc,
+            config.discord_cover_lookup,
+        );
 
         Self {
             audio,
             analyzer: SpectrumAnalyzer::new(),
             cover: CoverArt::new(),
+            discord,
             config,
             folders,
             root_label,
@@ -135,6 +143,7 @@ impl App {
                 shuffle: self.config.shuffle,
                 repeat: self.config.repeat,
                 visualizer_mode: self.config.visualizer,
+                discord_rpc: self.config.discord_rpc,
                 input_mode: self.input_mode,
                 search_query: &self.search_query,
                 folders: &self.folders,
@@ -167,6 +176,7 @@ impl App {
             }
         }
 
+        self.discord.clear();
         self.config.volume = self.audio.volume();
         self.config.music_dirs = self.folders.clone();
         let _ = self.config.save();
@@ -379,6 +389,7 @@ impl App {
                     && (self.audio.is_playing() || self.audio.is_paused())
                 {
                     self.audio.toggle_pause();
+                    self.sync_discord_state();
                 } else {
                     self.play_selected();
                 }
@@ -423,6 +434,16 @@ impl App {
                     format!("Visualizer: {}", self.config.visualizer.label()),
                     false,
                 );
+            }
+            KeyCode::Char('D') => {
+                self.config.discord_rpc = !self.config.discord_rpc;
+                self.discord.set_enabled(self.config.discord_rpc);
+                if self.config.discord_rpc {
+                    self.sync_discord_state();
+                }
+                let _ = self.config.save();
+                let state = if self.config.discord_rpc { "ON" } else { "OFF" };
+                self.show_toast(format!("Discord RPC: {state}"), false);
             }
             _ => {}
         }
@@ -595,6 +616,9 @@ impl App {
                 if let Some(vis_pos) = self.visible_indices.iter().position(|&i| i == track_idx) {
                     self.list_state.select(Some(vis_pos));
                 }
+                if let Some(active) = self.tracks.get(track_idx) {
+                    self.discord.update_playing(active, Duration::ZERO);
+                }
                 self.show_toast(format!("Playing: {title}"), false);
             }
             Err(err) => {
@@ -643,6 +667,7 @@ impl App {
         } else {
             self.audio.stop();
             self.cover.clear();
+            self.discord.clear();
             self.playing_index = None;
             self.active_track_path = None;
         }
@@ -683,13 +708,26 @@ impl App {
     fn seek_relative(&mut self, delta_secs: i64) {
         match self.audio.seek_relative(delta_secs) {
             Ok(pos) => {
-                if self.playing_index.is_some() {
+                if let Some(active) = self.playing_index.and_then(|idx| self.tracks.get(idx)) {
+                    if self.audio.is_playing() {
+                        self.discord.update_playing(active, pos);
+                    }
                     self.show_toast(format!("Seek {}", format_duration(pos)), false);
                 }
             }
             Err(err) => {
                 self.show_toast(err.to_string(), true);
             }
+        }
+    }
+
+    fn sync_discord_state(&self) {
+        if self.audio.is_playing() {
+            if let Some(active) = self.playing_index.and_then(|idx| self.tracks.get(idx)) {
+                self.discord.update_playing(active, self.audio.position());
+            }
+        } else {
+            self.discord.clear();
         }
     }
 

@@ -54,6 +54,7 @@ pub struct UiSnapshot<'a> {
     pub shuffle: bool,
     pub repeat: RepeatMode,
     pub visualizer_mode: VisualizerMode,
+    pub discord_rpc: bool,
     pub input_mode: InputMode,
     pub search_query: &'a str,
     pub folders: &'a [PathBuf],
@@ -99,11 +100,14 @@ pub fn render(
     header::render(
         frame,
         rows[0],
-        snapshot.theme_kind,
-        &theme,
-        active_track,
-        snapshot.tracks.len(),
-        snapshot.scanning,
+        &header::HeaderView {
+            theme_kind: snapshot.theme_kind,
+            theme: &theme,
+            active_track,
+            total_tracks: snapshot.tracks.len(),
+            scanning: snapshot.scanning,
+            discord_rpc: snapshot.discord_rpc,
+        },
     );
 
     let body = Layout::default()
@@ -865,7 +869,7 @@ fn render_folder_modal(frame: &mut Frame, area: Rect, snapshot: &UiSnapshot<'_>,
 
 fn render_help_modal(frame: &mut Frame, area: Rect, theme: &Theme) {
     let modal_w = area.width.min(62);
-    let modal_h = area.height.min(20);
+    let modal_h = area.height.min(21);
     let modal_area = Rect {
         x: area.x + area.width.saturating_sub(modal_w) / 2,
         y: area.y + area.height.saturating_sub(modal_h) / 2,
@@ -907,6 +911,7 @@ fn render_help_modal(frame: &mut Frame, area: Rect, theme: &Theme) {
             "Cycle monochrome theme (Obsidian / Graphite / Noir / Paper)",
         ),
         ("v", "Cycle visualizer mode (Spectrum / Mirror / Wave)"),
+        ("D", "Toggle Discord Rich Presence"),
         ("? / Esc / q", "Toggle help / Quit"),
     ];
 
