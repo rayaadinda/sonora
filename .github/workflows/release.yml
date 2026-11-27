@@ -44,16 +44,27 @@ jobs:
 
           $shouldRelease = $true
           if (-not $isTag -and $env:GITHUB_EVENT_NAME -eq "push") {
-            gh release view $tag 2>$null
-            if ($LASTEXITCODE -eq 0) {
+            $headers = @{
+              Authorization = "Bearer $env:GH_TOKEN"
+              Accept = "application/vnd.github+json"
+              "User-Agent" = "sonora-release-ci"
+            }
+            $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$tag"
+            try {
+              $null = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
               Write-Host "Release $tag already exists; skipping automatic release on main push."
               $shouldRelease = $false
+            } catch {
+              $status = $_.Exception.Response.StatusCode.value__
+              if ($status -ne 404) {
+                throw
+              }
             }
           }
 
-          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "should_release=$($shouldRelease.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "should_release=$($shouldRelease.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - uses: dtolnay/rust-toolchain@stable
         if: steps.meta.outputs.should_release == 'true'
